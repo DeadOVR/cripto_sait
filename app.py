@@ -26,14 +26,12 @@ class User(Base):
 class MiningRecord(Base):
     __tablename__ = 'mining_records'
     id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey('users.id'))
     username = Column(String(50))
     email = Column(String(255))
     cryptocurrency = Column(String(50), nullable=False)
     amount = Column(Numeric(20, 10), default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    user = relationship("User", backref="mining_records")
 
 # Подключение к PostgreSQL
 DATABASE_URL = 'postgresql+psycopg2://postgres:12345678@localhost:5432/testshop'
@@ -121,8 +119,13 @@ def dashboard():
     db_session = Session()
     try:
         user = db_session.query(User).get(session['user_id'])
-        mining_records = db_session.query(MiningRecord).filter_by(user_id=user.id).order_by(
-            MiningRecord.created_at.desc()).all()
+        # Фильтруем по username вместо user_id
+        mining_records = db_session.query(MiningRecord).filter_by(
+            username=user.username
+        ).order_by(
+            MiningRecord.created_at.desc()
+        ).all()
+
         return render_template('dashboard.html',
                                username=user.username,
                                mining_records=mining_records)
@@ -140,21 +143,21 @@ def save_mining():
     try:
         user = db_session.query(User).get(session['user_id'])
 
-        # Сохраняем запись с данными пользователя
+        # Создаем запись без user_id
         record = MiningRecord(
-            user_id=user.id,
-            username=user.username,  # Добавляем имя пользователя
-            email=user.email,        # Добавляем email
+            username=user.username,
+            email=user.email,
             cryptocurrency=data['cryptocurrency'],
             amount=float(data['amount'])
         )
         db_session.add(record)
         db_session.commit()
 
+        # Обновляем запрос для подсчета суммы (теперь фильтруем по username)
         total_amount = db_session.query(
             func.sum(MiningRecord.amount)
         ).filter_by(
-            user_id=user.id,
+            username=user.username,
             cryptocurrency=data['cryptocurrency']
         ).scalar() or 0
 
